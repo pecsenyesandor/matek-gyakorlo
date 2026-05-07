@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <title>Matek Aréna - Stabil Verzió</title>
+    <style>
+        :root { --panel-bg: rgba(255, 255, 255, 0.96); --primary: #ff4757; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background-size: cover; background-position: center; background-color: #a1c4fd; }
+        .sky-obj { position: absolute; z-index: -1; pointer-events: none; }
+        @keyframes float { from { left: -150px; } to { left: 110%; } }
+        .cloud { top: 10%; font-size: 80px; animation: float 30s linear infinite; opacity: 0.7; }
+        .container { background: var(--panel-bg); padding: 25px; border-radius: 30px; box-shadow: 0 15px 50px rgba(0,0,0,0.4); width: 95%; max-width: 850px; text-align: center; border: 5px solid white; position: relative; min-height: 500px; }
+        .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px; }
+        .mode-btn { padding: 20px; border-radius: 20px; cursor: pointer; border: none; font-size: 1.2rem; font-weight: bold; color: white; transition: 0.2s; box-shadow: 0 5px rgba(0,0,0,0.2); }
+        .btn-plus { background: #48bb78; } .btn-minus { background: #f56565; }
+        .btn-mult { background: #ed8936; } .btn-div { background: #4299e1; }
+        .grid { display: grid; grid-template-columns: repeat(12, 45px); grid-template-rows: repeat(7, 45px); gap: 1px; background: #999; border: 3px solid #333; margin: 15px auto; border-radius: 10px; overflow: hidden; width: max-content; }
+        .cell { width: 45px; height: 45px; background: white; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: bold; position: relative; }
+        .target { background: #ffff00 !important; outline: 4px solid #2b6cb0; z-index: 5; }
+        .btn-num { background: #ed8936; width: 60px; height: 60px; font-size: 24px; color: white; border: none; border-radius: 12px; margin: 4px; cursor: pointer; box-shadow: 0 4px #c05621; outline: none; }
+        .line { position: absolute; bottom: 0; left: 0; width: 100%; height: 5px; background: black; z-index: 10; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; margin-top: 10px; }
+        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+        .res-box { background: white; padding: 15px; border-radius: 15px; border: 2px dashed #48bb78; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="sky-obj cloud">☁️</div>
+    <div class="container">
+        <div id="screen-menu">
+            <h1>🌟 MATEK ARÉNA 🌟</h1>
+            <input type="text" id="p-name" placeholder="Írd be a neved..." style="padding:12px; font-size:18px; border-radius:10px; border:2px solid #ddd; text-align:center; margin-bottom:10px;"><br>
+            <button class="mode-btn" style="background:#718096; padding:10px 20px; font-size: 1rem; margin-bottom: 15px;" onclick="fullExit()">🗑️ Név törlése / Kilépés</button>
+            <div class="menu-grid">
+                <button class="mode-btn btn-plus" onclick="initGame('plus')">➕ Összeadás</button>
+                <button class="mode-btn btn-minus" onclick="initGame('minus')">➖ Kivonás</button>
+                <button class="mode-btn btn-mult" onclick="initGame('mult')">✖️ Szorzás</button>
+                <button class="mode-btn btn-div" onclick="initGame('div')">➗ Osztás</button>
+            </div>
+        </div>
+
+        <div id="screen-game" style="display:none">
+            <div style="display:flex; justify-content: space-between; font-weight: bold; margin-bottom: 10px;">
+                <button onclick="backToMenu()" style="cursor:pointer">⬅️ Menü</button>
+                <span id="game-title"></span>
+                <span>⏱️ <span id="ui-sec">0</span>s | ❌ <span id="ui-err">0</span></span>
+            </div>
+            <div class="grid" id="main-grid"></div>
+            <div id="numpad"></div>
+        </div>
+
+        <div id="screen-end" style="display:none">
+            <h2 id="res-msg"></h2>
+            <div class="res-box"><div id="res-stats" style="font-size: 1.3rem; font-weight: bold;"></div></div>
+            <h3>🏆 <span id="lb-title"></span> Top 5</h3>
+            <table id="lb-table"><thead><tr><th>#</th><th>Név</th><th>Pont</th><th>Idő/Hiba</th></tr></thead><tbody id="lb-body"></tbody></table><br>
+            <button class="mode-btn btn-plus" onclick="initGame(st.mode)">🔄 Újra</button>
+            <button class="mode-btn" style="background:#4299e1;" onclick="backToMenu()">🏠 Menü</button>
+        </div>
+    </div>
+
+<script>
+let st = { name:"", mode:"", idx:0, err:0, sec:0, tasks:[], steps:[], sIdx:0, timer:null };
+const bgs = ['https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'];
+
+window.onload = () => { if(localStorage.getItem('arena_user_name')) document.getElementById('p-name').value = localStorage.getItem('arena_user_name'); };
+function fullExit() { localStorage.removeItem('arena_user_name'); document.getElementById('p-name').value = ""; backToMenu(); }
+function backToMenu() {
+    document.getElementById('screen-game').style.display = 'none';
+    document.getElementById('screen-end').style.display = 'none';
+    document.getElementById('screen-menu').style.display = 'block';
+    if(st.timer) clearInterval(st.timer);
+}
+
+function initGame(m) {
+    st.name = document.getElementById('p-name').value.trim() || "Bajnok";
+    localStorage.setItem('arena_user_name', st.name);
+    st.mode = m; st.idx = 0; st.err = 0; st.sec = 0; st.tasks = [];
+    document.getElementById('ui-err').innerText = "0";
+    document.getElementById('ui-sec').innerText = "0";
+    document.getElementById('screen-menu').style.display = 'none';
+    document.getElementById('screen-end').style.display = 'none';
+    document.getElementById('screen-game').style.display = 'block';
+    if(!document.getElementById('numpad').innerHTML) {
+        "1234567890".split('').forEach(v => {
+            let b = document.createElement('button'); b.className='btn-num'; b.innerText=v;
+            b.onclick = () => handleInput(v); document.getElementById('numpad').appendChild(b);
+        });
+        window.addEventListener('keydown', (e) => { if(e.key >= '0' && e.key <= '9') handleInput(e.key); });
+    }
+    if(st.timer) clearInterval(st.timer);
+    st.timer = setInterval(() => { st.sec++; document.getElementById('ui-sec').innerText = st.sec; }, 1000);
+    genTasks(); loadTask();
+}
+
+function genTasks() {
+    for(let i=0; i<3; i++) {
+        let a, b;
+        if(st.mode==='div') { b=Math.floor(Math.random()*7)+2; a=(Math.floor(Math.random()*100)+10)*b; }
+        else if(st.mode==='mult') { a=Math.floor(Math.random()*800)+100; b=Math.floor(Math.random()*7)+2; }
+        else { a=Math.floor(Math.random()*800)+100; b=Math.floor(Math.random()*800)+100; }
+        if(st.mode==='minus' && a<b) [a,b]=[b,a];
+        st.tasks.push({a:a.toString(), b:b.toString()});
+    }
+}
+
+function loadTask() {
+    if(st.idx >= 3) { finish(); return; }
+    st.sIdx = 0; st.steps = [];
+    const t = st.tasks[st.idx];
+    if(st.mode==='plus') buildPlus(t.a, t.b);
+    else if(st.mode==='minus') buildMinus(t.a, t.b);
+    else if(st.mode==='mult') buildMult(t.a, t.b);
+    else buildDiv(t.a, t.b);
+    renderGrid(); update();
+}
+
+function buildPlus(a,b){
+    let s1=a.padStart(3,'0'), s2=b.padStart(3,'0'), carry=0, res=[];
+    for(let i=2; i>=0; i--){
+        let sum = parseInt(s1[i])+parseInt(s2[i])+carry;
+        res.push({r:2, c:i+4, val:(sum%10).toString()});
+        carry = Math.floor(sum/10);
+    }
+    if(carry>0) res.push({r:2, c:3, val:carry.toString()});
+    st.steps = res;
+}
+
+function buildMinus(a,b){
+    let s1=a.padStart(3,'0'), s2=b.padStart(3,'0'), borrow=0, res=[];
+    for(let i=2; i>=0; i--){
+        let v1=parseInt(s1[i])-borrow, v2=parseInt(s2[i]);
+        if(v1<v2){ res.push({r:2, c:i+4, val:(v1+10-v2).toString()}); borrow=1; }
+        else { res.push({r:2, c:i+4, val:(v1-v2).toString()}); borrow=0; }
+    }
+    st.steps = res;
+}
+
+function buildMult(a,b){
+    let d=a.split('').map(Number), f=parseInt(b);
+    let o=d[2]*f, tv=d[1]*f+Math.floor(o/10), h=d[0]*f+Math.floor(tv/10);
+    st.steps=[{r:1,c:5,val:(o%10).toString()},{r:1,c:4,val:(tv%10).toString()}];
+    let hs=h.toString(); for(let i=0; i<hs.length; i++) st.steps.push({r:1, c:3-(hs.length-1-i), val:hs[i]});
+}
+
+function buildDiv(a,b){
+    let n=a.split('').map(Number), divisor=parseInt(b);
+    let cur = n[0];
+    st.steps.push({r:1, c:0, val:n[0].toString()}); // Első kijelölés
+    if (cur < divisor) {
+        st.steps.push({r:1, c:1, val:n[1].toString()}); // Második kijelölés
+        cur = cur * 10 + n[1];
+        st.steps.push({r:0, c:6, val:Math.floor(cur/divisor).toString()}); // Hányados
+        let m = cur % divisor;
+        st.steps.push({r:2, c:1, val:m.toString()}); // Maradék
+        st.steps.push({r:2, c:2, val:n[2].toString()}); // Lehozatal (pontosan a 2-es alatt)
+        cur = m * 10 + n[2];
+        st.steps.push({r:0, c:7, val:Math.floor(cur/divisor).toString()}); // Köv. hányados
+        st.steps.push({r:3, c:2, val:(cur % divisor).toString()}); // Vége maradék
+    } else {
+        st.steps.push({r:0, c:6, val:Math.floor(cur/divisor).toString()});
+        let m = cur % divisor;
+        st.steps.push({r:2, c:0, val:m.toString()});
+        st.steps.push({r:2, c:1, val:n[1].toString()}); // Pontosan a 4-es alatt
+        cur = m * 10 + n[1];
+        st.steps.push({r:0, c:7, val:Math.floor(cur/divisor).toString()});
+        let m2 = cur % divisor;
+        st.steps.push({r:3, c:1, val:m2.toString()});
+        st.steps.push({r:3, c:2, val:n[2].toString()}); // Pontosan a 2-es alatt
+        cur = m2 * 10 + n[2];
+        st.steps.push({r:0, c:8, val:Math.floor(cur/divisor).toString()});
+        st.steps.push({r:4, c:2, val:(cur % divisor).toString()});
+    }
+}
+
+function renderGrid() {
+    const g=document.getElementById('main-grid'); g.innerHTML='';
+    const t=st.tasks[st.idx];
+    for(let i=0; i<84; i++) g.innerHTML+=`<div class="cell" id="r${Math.floor(i/12)}c${i%12}"></div>`;
+    if(st.mode==='plus' || st.mode==='minus'){
+        for(let i=0; i<3; i++){
+            document.getElementById(`r0c${i+4}`).innerText=t.a.padStart(3,' ')[i];
+            let c2=document.getElementById(`r1c${i+4}`); c2.innerText=t.b.padStart(3,' ')[i];
+            c2.innerHTML+='<div class="line"></div>';
+        }
+        document.getElementById('r1c3').innerText=(st.mode==='plus'?'+':'-');
+    } else if(st.mode==='mult'){
+        for(let i=0; i<3; i++){ let c=document.getElementById(`r0c${i+3}`); c.innerText=t.a[i]; c.innerHTML+='<div class="line"></div>'; }
+        document.getElementById('r0c6').innerText='·'; document.getElementById('r0c7').innerText=t.b;
+    } else {
+        for(let i=0; i<3; i++) document.getElementById(`r0c${i}`).innerText=t.a[i];
+        document.getElementById('r0c3').innerText=':'; document.getElementById('r0c4').innerText=t.b; document.getElementById('r0c5').innerText='=';
+    }
+}
+
+function update() {
+    document.querySelectorAll('.cell').forEach(c=>c.classList.remove('target'));
+    if(st.sIdx>=st.steps.length){ st.idx++; setTimeout(loadTask, 400); return; }
+    const cell = document.getElementById(`r${st.steps[st.sIdx].r}c${st.steps[st.sIdx].c}`);
+    if(cell) cell.classList.add('target');
+}
+
+function handleInput(v) {
+    if(st.sIdx>=st.steps.length) return;
+    const s=st.steps[st.sIdx];
+    if(v===s.val){ document.getElementById(`r${s.r}c${s.c}`).innerText=v; st.sIdx++; update(); }
+    else { st.err++; document.getElementById('ui-err').innerText=st.err; }
+}
+
+function finish() {
+    clearInterval(st.timer);
+    const score = Math.max(0, 1000 - (st.sec * 2) - (st.err * 10));
+    const lbKey = 'lb_final_v10_' + st.mode;
+    let lb = JSON.parse(localStorage.getItem(lbKey) || '[]');
+    lb.push({name: st.name, score: score, time: st.sec, err: st.err});
+    lb.sort((a,b)=>b.score - a.score);
+    localStorage.setItem(lbKey, JSON.stringify(lb.slice(0,5)));
+
+    document.getElementById('screen-game').style.display='none';
+    document.getElementById('screen-end').style.display='block';
+    const mNames = {plus:'Összeadás', minus:'Kivonás', mult:'Szorzás', div:'Osztás'};
+    document.getElementById('lb-title').innerText = mNames[st.mode];
+    document.getElementById('res-msg').innerText=`Szép munka, ${st.name}!`;
+    document.getElementById('res-stats').innerHTML=`Pontszám: ${score} | Idő: ${st.sec} mp | Hiba: ${st.err}`;
+    document.getElementById('lb-body').innerHTML=lb.map((x,i)=>`<tr><td>${i+1}.</td><td>${x.name}</td><td>${x.score}</td><td>${x.time}s/${x.err}</td></tr>`).join('');
+}
+</script>
+</body>
+</html>
